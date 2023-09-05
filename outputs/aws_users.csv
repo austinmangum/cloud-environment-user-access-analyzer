@@ -1,0 +1,3 @@
+Name,Accounts,Groups,Policies,Details
+austin_mangum,Main-Account,Admin,test_policy_1,"test_policy_1:lambda:GetEventSourceMapping, test_policy_1:lambda:AddLayerVersionPermission, test_policy_1:rds:*, test_policy_1:lambda:GetAccountSettings, Admin:*"
+Jacob_test,Main-Account,Admin,,Admin:*
