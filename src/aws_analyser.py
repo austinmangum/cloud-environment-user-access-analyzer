@@ -2,6 +2,15 @@ import boto3
 import csv
 import os
 
+def get_account_alias():
+    """Fetches the account alias of the AWS account."""
+    iam = boto3.client('iam')
+    account_aliases = iam.list_account_aliases()
+    if account_aliases['AccountAliases']:
+        return account_aliases['AccountAliases'][0]
+    else:
+        return "Unknown_Account"
+
 def get_all_iam_users():
     """Fetches all IAM users."""
     iam = boto3.client('iam')
@@ -49,7 +58,7 @@ def get_policy_details(policy_arn):
 def run_analysis():
     print("Running AWS Analysis...")
     users_data = []
-
+    account_alias = get_account_alias()
     users = get_all_iam_users()
     for user in users:
         username = user['UserName']
@@ -78,7 +87,7 @@ def run_analysis():
 
         user_data = {
             'Name': username,
-            'Accounts': 'Main-Account',
+            'Account': account_alias,
             'Groups': ', '.join(groups),
             'Policies': ', '.join([policy['PolicyName'] for policy in user_policies]),
             'Details': ', '.join(details)
@@ -86,9 +95,9 @@ def run_analysis():
         users_data.append(user_data)
 
     # Save to CSV
-    output_path = os.path.join('outputs', 'aws_users.csv')
+    output_path = os.path.join('outputs', f'{account_alias}_aws_users.csv')
     with open(output_path, 'w', newline='') as csvfile:
-        fieldnames = ['Name', 'Accounts', 'Groups', 'Policies', 'Details']
+        fieldnames = ['Name', 'Account', 'Groups', 'Policies', 'Details']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
         writer.writeheader()

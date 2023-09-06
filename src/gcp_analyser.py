@@ -1,58 +1,81 @@
-from google.cloud import iam_v1, storage
-import os
+from googleapiclient import discovery
+from google.auth import default
 import csv
+import os
+# I am struggling to pull my project ID from default. meed to stroubleshoot more
+def get_project_id():
+    creds, project_id = default()
+    project_id = "url-mapper"
+    print(f"Project ID: {project_id}")  # Add this line to debug
+    print(f"creds: {creds}")  # Add this line to debug
+    return project_id
+#project_id = 'url-mapper'
 
-def get_all_iam_members(project_id):
-    """Fetches all IAM members for a given GCP project."""
-    client = iam_v1.IAMPolicyClient()
-    policy = client.get_iam_policy(resource=project_id)
-    return policy.bindings
+#def get_current_project():
+#    """Fetches the current GCP project ID."""
+#    creds, project_id = default()
+#    return project_id
 
-def get_member_roles(member, bindings):
-    """Fetches roles for a given IAM member."""
-    roles = []
-    for binding in bindings:
-        if member in binding.members:
-            roles.append(binding.role)
-    return roles
+def get_all_gcp_users(project_id, creds):
+    """Fetches all GCP IAM members."""
+    service = discovery.build('cloudresourcemanager', 'v1', credentials=creds)
+    policy = service.projects().getIamPolicy(resource= project_id, body={}).execute()
+    return [binding['members'] for binding in policy['bindings']]
 
-def get_role_permissions(role_name):
-    """Fetches permissions associated with a role."""
-    # Placeholder: Fetch permissions associated with a role in GCP.
-    return []
+def get_user_policies(username, project_id, creds):
+    """Fetches attached policies for a given GCP IAM member."""
+    service = discovery.build('cloudresourcemanager', 'v1', credentials=creds)
+    policy = service.projects().getIamPolicy(resource= project_id, body={}).execute()
+    user_policies = [binding for binding in policy['bindings'] if username in binding['members']]
+    return user_policies
 
-def run_analysis(project_id):
+def get_project_name(project_id, creds):
+    """Fetches the project name using project ID."""
+    service = discovery.build('cloudresourcemanager', 'v1', credentials=creds)
+    project = service.projects().get(projectId=project_id).execute()
+    return project['name']
+
+def run_analysis():
     print("Running GCP Analysis...")
+    #project_id = get_project_id()  # Add this line to get the project ID
     users_data = []
+    creds, project_id = default()
+    project_name = get_project_name(project_id, creds)
 
-    bindings = get_all_iam_members(project_id)
-    
-    for binding in bindings:
-        for member in binding.members:
-            roles = get_member_roles(member, bindings)
-            resources = set()
+    users = get_all_gcp_users(project_id, creds)
+    for user_list in users:
+        for user in user_list:
+            username = user
 
-            for role in roles:
-                role_permissions = get_role_permissions(role)
-                resources.update(role_permissions)
+            user_policies = get_user_policies(username, project_id, creds)
+            details = []
+
+            for policy in user_policies:
+                policy_details = policy['role']
+                details.append(f"{policy['role']}:{', '.join(policy['members'])}")
 
             user_data = {
-                'Name': member,
-                'Accounts': project_id,  # This will list the project ID; consider replacing with a descriptive name if needed.
-                'Policies': ', '.join(roles),
-                'Resources': ', '.join(resources)
+                'Name': username,
+                'Projects': project_name,
+                'Policies': ', '.join([policy['role'] for policy in user_policies]),
+                'Details': ', '.join(details)
             }
             users_data.append(user_data)
 
     # Save to CSV
     output_path = os.path.join('outputs', 'gcp_users.csv')
     with open(output_path, 'w', newline='') as csvfile:
-        fieldnames = ['Name', 'Accounts', 'Policies', 'Resources']
+        fieldnames = ['Name', 'Projects', 'Policies', 'Details']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        
+
         writer.writeheader()
         for user_data in users_data:
             writer.writerow(user_data)
 
     print(f"Analysis completed. Results saved to {output_path}")
 
+# Make sure the 'outputs' directory exists
+if not os.path.exists('outputs'):
+    os.makedirs('outputs')
+
+run_analysis()
